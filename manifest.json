@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "id": "atsokolas.elevation",
+  "name": "Elevation",
+  "version": "1.0.0",
+  "author": "atsokolas",
+  "license": "MIT",
+  "description": "A different piece of architecture every day, on the Omarchy bar.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Elevation",
+    "description": "The day's building on the bar; photo, architect, and the story in the panel.",
+    "category": "Info",
+    "aliases": [
+      "elevation",
+      "architecture",
+      "building",
+      "daily",
+      "buildings"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "showName": true,
+      "showPhoto": true,
+      "notify": false
+    },
+    "schema": [
+      {
+        "key": "showName",
+        "type": "boolean",
+        "label": "Name on the bar",
+        "defaultValue": true
+      },
+      {
+        "key": "showPhoto",
+        "type": "boolean",
+        "label": "Photo in the panel",
+        "defaultValue": true
+      },
+      {
+        "key": "notify",
+        "type": "boolean",
+        "label": "Notify on the daily change",
+        "defaultValue": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,203 @@
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import "Model.js" as Model
+
+// One engine per shell. Every bar — one per monitor — reads this instance, so
+// the article is fetched once and the day rolls over once.
+//
+// Nothing here needs the network to work: the curated note ships with the
+// plugin, and Wikipedia only ever adds to what is already on screen.
+Item {
+  id: root
+
+  property var shell: null
+  property var settings: ({})
+  property bool active: true
+
+  readonly property string cacheDir: Quickshell.env("HOME") + "/.cache/omarchy/elevation"
+
+  property string todayKey: Model.dateKeyFromDate(new Date())
+  property string dateKey: Model.dateKeyFromDate(new Date())
+
+  readonly property var entry: Model.entryForDateKey(dateKey)
+  readonly property var position: Model.cyclePosition(dateKey)
+  readonly property bool isToday: dateKey === todayKey
+
+  property var summary: ({ ok: false, extract: "", description: "", image: "", lat: 0, lon: 0 })
+  property string imagePath: ""
+  property bool loading: false
+  property bool imageLoading: false
+  property string lastError: ""
+
+  readonly property bool showName: Model.boolSetting(setting("showName", true), true)
+  readonly property bool showPhoto: Model.boolSetting(setting("showPhoto", true), true)
+  readonly property bool notify: Model.boolSetting(setting("notify", false), false)
+
+  readonly property string barText: entry ? Model.barLabel(entry, 24) : Model.APP_NAME
+  readonly property string body: Model.bodyText(entry, summary)
+
+  // Raised whenever the visible building changes, so the bar can rebuild its
+  // skyline and the panel can re-run its reveal.
+  signal entryChanged2(var entry)
+
+  // Guards a repeat toast for the same day, the way Easel does it.
+  property string _announcedKey: ""
+  property string _summaryOutput: ""
+  property string _imageOutput: ""
+  property string _loadedTitle: ""
+
+  function setting(name, fallback) {
+    var value = settings ? settings[name] : undefined
+    return value === undefined || value === null ? fallback : value
+  }
+
+  function load(force) {
+    if (!active || !entry) return
+    var title = String(entry.w)
+    // A date shuffle back onto the same building is a no-op unless forced.
+    if (!force && _loadedTitle === title && summary.ok) return
+    _loadedTitle = title
+    summary = { ok: false, extract: "", description: "", image: "", lat: 0, lon: 0 }
+    imagePath = ""
+    lastError = ""
+    loading = true
+    _summaryOutput = ""
+    summaryProcess.command = Model.summaryCommand(cacheDir, title, force === true)
+    summaryProcess.running = true
+  }
+
+  function applySummary(raw) {
+    loading = false
+    var parsed = Model.parseSummary(raw)
+    if (!parsed.ok) {
+      // The article genuinely has no summary — retrying will not help.
+      lastError = "No article — showing the curated note"
+      retryTimer.stop()
+      return
+    }
+    summary = parsed
+    lastError = ""
+    retryTimer.stop()
+    if (showPhoto) loadImage()
+  }
+
+  function loadImage() {
+    if (!entry || !summary.ok || !summary.image) return
+    var url = Model.upscaleThumb(summary.image, 960)
+    var path = Model.imageCachePath(cacheDir, entry.w, url)
+    imageLoading = true
+    _imageOutput = ""
+    imageProcess.command = Model.imageCommand(cacheDir, path, url)
+    imageProcess.running = true
+  }
+
+  function refresh() { load(true) }
+
+  function setDateKey(key) {
+    var next = String(key || todayKey)
+    if (next === dateKey) {
+      load(false)
+      return
+    }
+    dateKey = next
+    load(false)
+    entryChanged2(entry)
+  }
+
+  function shiftDay(days) { setDateKey(Model.shiftDateKey(dateKey, days)) }
+  function jumpToday() { setDateKey(todayKey) }
+
+  // A coin flip through the canon rather than a date — same machinery, just a
+  // day picked at random from the next few years.
+  function surprise() {
+    var span = Model.BUILDINGS.length
+    var offset = Math.floor(Math.random() * span) + 1
+    setDateKey(Model.shiftDateKey(todayKey, offset))
+  }
+
+  function openArticle() {
+    if (!entry) return
+    Quickshell.execDetached(Model.openCommand(entry.w))
+  }
+
+  function openMap() {
+    var command = Model.mapCommand(summary)
+    if (command) Quickshell.execDetached(command)
+  }
+
+  function announce(forEntry) {
+    if (!notify || !forEntry) return
+    if (_announcedKey === dateKey) return
+    _announcedKey = dateKey
+    var command = Model.toastCommand(forEntry)
+    if (command) Quickshell.execDetached(command)
+  }
+
+  onShowPhotoChanged: if (showPhoto && !imagePath) loadImage()
+
+  Component.onCompleted: {
+    Quickshell.execDetached(Model.pruneCommand(cacheDir, 120))
+    load(false)
+  }
+
+  Process {
+    id: summaryProcess
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root._summaryOutput = text
+    }
+    onExited: function(code) {
+      if (code !== 0) {
+        root.loading = false
+        root.lastError = "Offline — showing the curated note"
+        retryTimer.restart()
+        return
+      }
+      root.applySummary(root._summaryOutput)
+    }
+  }
+
+  Process {
+    id: imageProcess
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root._imageOutput = text
+    }
+    onExited: function(code) {
+      root.imageLoading = false
+      if (code !== 0) {
+        root.imagePath = ""
+        return
+      }
+      root.imagePath = String(root._imageOutput).replace(/^\s+|\s+$/g, "")
+    }
+  }
+
+  // The network can arrive after the shell does. Back off gently rather than
+  // hammering Wikipedia, and stop as soon as anything lands.
+  Timer {
+    id: retryTimer
+    interval: 60000
+    repeat: true
+    running: false
+    onTriggered: if (root.active) root.load(false)
+  }
+
+  // Midnight rollover. Checked on a plain timer rather than a scheduled alarm
+  // so it also survives a suspend/resume across the date boundary.
+  Timer {
+    interval: 30000
+    running: root.active
+    repeat: true
+    onTriggered: {
+      var today = Model.dateKeyFromDate(new Date())
+      if (today === root.todayKey) return
+      var wasToday = root.dateKey === root.todayKey
+      root.todayKey = today
+      if (!wasToday) return
+      root.setDateKey(today)
+      root.announce(root.entry)
+    }
+  }
+}
