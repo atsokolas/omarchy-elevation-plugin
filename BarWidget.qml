@@ -120,6 +120,7 @@ BarWidget {
 
       ElevationIcon {
         id: icon
+        form: root.entry ? root.entry.f : "slab"
         iconSize: button.fontSize
         iconColor: button.foreground
         x: root.vertical ? (parent.width - width) / 2 : button.scaledHorizontalMargin

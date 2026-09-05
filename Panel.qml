@@ -156,6 +156,8 @@ Panel {
         else if (key === "c") root.copyEntry()
         else if (key === "m") root.service.openMap()
         else if (key === "n") root.service.surprise()
+        else if (key === "[") root.service.stepHistory(-1)
+        else if (key === "]") root.service.stepHistory(1)
       }
 
       ColumnLayout {
@@ -171,6 +173,7 @@ Panel {
             id: heroIcon
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
+            form: root.entry ? root.entry.f : "slab"
             iconSize: Style.font.display
             iconColor: root.foreground
           }
@@ -267,6 +270,7 @@ Panel {
             // Standing in for the photo: the skyline, drawn large and faint.
             ElevationIcon {
               anchors.centerIn: parent
+              form: root.entry ? root.entry.f : "slab"
               iconSize: Math.min(parent.height * 0.5, Style.space(72))
               iconColor: root.foreground
               opacity: photo.status === Image.Ready ? 0 : 0.22
@@ -311,7 +315,7 @@ Panel {
 
             Text {
               Layout.fillWidth: true
-              text: Model.placeLine(root.entry).toUpperCase()
+              text: Model.placeLine(root.entry, root.service.summary, root.service.nowMs).toUpperCase()
               visible: text !== ""
               color: root.dim
               font.family: root.fontFamily
@@ -343,6 +347,92 @@ Panel {
             }
           }
 
+          // ---- Where it sits in history ---------------------------------
+          // Every building in the canon as a tick, oldest on the left, in
+          // rank order rather than by year — a linear axis would cram the
+          // whole twentieth century into the last inch. Click to visit.
+          Item {
+            id: timeline
+            Layout.fillWidth: true
+            implicitHeight: Style.space(30)
+
+            readonly property var order: Model.chronology()
+            readonly property int rank: Model.chronoRank(root.entry)
+            readonly property real inset: Style.spaceReal(3)
+            readonly property real track: width - inset * 2
+            function xAt(r) { return inset + (order.length > 1 ? r / (order.length - 1) : 0) * track }
+
+            Canvas {
+              id: ticks
+              anchors.fill: parent
+              onWidthChanged: requestPaint()
+              onPaint: {
+                var ctx = getContext("2d")
+                ctx.reset()
+                ctx.strokeStyle = Qt.rgba(root.dim.r, root.dim.g, root.dim.b, 0.55)
+                ctx.lineWidth = 1
+                ctx.beginPath()
+                for (var i = 0; i < timeline.order.length; i++) {
+                  var x = Math.round(timeline.xAt(i)) + 0.5
+                  ctx.moveTo(x, Style.spaceReal(9)); ctx.lineTo(x, Style.spaceReal(13))
+                }
+                ctx.stroke()
+              }
+            }
+
+            // You are here.
+            Rectangle {
+              id: marker
+              width: Style.spaceReal(3)
+              height: Style.spaceReal(11)
+              radius: width / 2
+              color: Color.accent
+              x: timeline.xAt(timeline.rank) - width / 2
+              y: Style.spaceReal(6)
+              Behavior on x { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+            }
+
+            Text {
+              anchors.left: parent.left
+              anchors.bottom: parent.bottom
+              text: Model.yearLabel(Model.BUILDINGS[timeline.order[0]].y)
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+
+            Text {
+              anchors.right: parent.right
+              anchors.bottom: parent.bottom
+              text: Model.yearLabel(Model.BUILDINGS[timeline.order[timeline.order.length - 1]].y)
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+
+            Text {
+              id: yearNow
+              anchors.bottom: parent.bottom
+              x: Math.max(Style.spaceReal(48), Math.min(timeline.width - width - Style.spaceReal(48), marker.x + marker.width / 2 - width / 2))
+              text: root.entry ? Model.yearLabel(root.entry.y) : ""
+              color: Color.accent
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              Behavior on x { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+            }
+
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: function(mouse) {
+                var r = Math.round((mouse.x - timeline.inset) / timeline.track * (timeline.order.length - 1))
+                r = Math.max(0, Math.min(timeline.order.length - 1, r))
+                root.service.showIndex(timeline.order[r])
+              }
+            }
+          }
+
           PanelSeparator { Layout.fillWidth: true }
 
           // ---- Footer ----------------------------------------------------
@@ -356,8 +446,7 @@ Panel {
               anchors.right: footerButtons.left
               anchors.rightMargin: Style.space(8)
               anchors.verticalCenter: parent.verticalCenter
-              text: Model.sourceLine(root.service.summary) + "  ·  "
-                + root.service.position.position + " of " + root.service.position.total
+              text: Model.sourceLine(root.service.summary) + "  ·  " + Model.cycleLine(root.service.position)
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
@@ -484,7 +573,7 @@ Panel {
 
           Text {
             Layout.fillWidth: true
-            text: "← →  browse days   ·   t  today   ·   n  surprise me\no  open   ·   c  copy   ·   m  map   ·   r  refetch"
+            text: "← →  browse days   ·   [ ]  earlier / later in history   ·   t  today\nn  surprise me   ·   o  open   ·   c  copy   ·   m  map   ·   r  refetch"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption

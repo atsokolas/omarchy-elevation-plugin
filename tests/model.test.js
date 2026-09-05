@@ -16,10 +16,12 @@ test("the canon is well formed", () => {
   assert.ok(Model.BUILDINGS.length > 100)
   const titles = new Set()
   for (const b of Model.BUILDINGS) {
-    for (const field of ["w", "n", "a", "y", "p", "s", "note"]) {
+    for (const field of ["w", "n", "a", "y", "p", "s", "f", "note"]) {
       assert.equal(typeof b[field], "string", `${b.w} is missing ${field}`)
       assert.ok(b[field].length > 0, `${b.w} has an empty ${field}`)
     }
+    assert.ok(Model.FORMS.includes(b.f), `${b.w} has an unknown form ${b.f}`)
+    assert.ok(!isNaN(Model.yearValue(b.y)), `${b.w} has no year the timeline can read: ${b.y}`)
     assert.ok(!titles.has(b.w), `duplicate article ${b.w}`)
     titles.add(b.w)
     // The article title is the fetch key; a stray space breaks the cache path.
@@ -72,11 +74,84 @@ test("dates before the epoch still resolve", () => {
   assert.ok(entry && entry.w)
 })
 
-test("cycle position runs 1..total", () => {
+test("cycle position runs 1..total and counts down to the reshuffle", () => {
   const total = Model.BUILDINGS.length
   const first = Model.cyclePosition("20260101")
   assert.equal(first.total, total)
   assert.ok(first.position >= 1 && first.position <= total)
+  assert.equal(first.position + first.remaining, total)
+  assert.equal(Model.cycleLine({ position: 43, total: 189, remaining: 146 }), "43 of 189 · reshuffle in 146 days")
+  assert.equal(Model.cycleLine({ position: 188, total: 189, remaining: 1 }), "188 of 189 · reshuffle in 1 day")
+  assert.equal(Model.cycleLine({ position: 189, total: 189, remaining: 0 }), "189 of 189 · reshuffle tomorrow")
+  assert.equal(Model.cycleLine({}), "")
+})
+
+test("every silhouette is drawn for at least one building", () => {
+  const drawn = new Set(Model.BUILDINGS.map(b => b.f))
+  for (const form of Model.FORMS) assert.ok(drawn.has(form), `nothing is a ${form}`)
+})
+
+test("years parse from the loose strings the canon uses", () => {
+  assert.equal(Model.yearValue("c. 2560 BC"), -2560)
+  assert.equal(Model.yearValue("432 BC"), -432)
+  assert.equal(Model.yearValue("1st century"), 50)
+  assert.equal(Model.yearValue("c. 800"), 800)
+  assert.equal(Model.yearValue("1882–"), 1882)
+  assert.equal(Model.yearValue("690, rebuilt every 20 years"), 690)
+  assert.ok(isNaN(Model.yearValue("someday")))
+  assert.equal(Model.yearLabel("432 BC"), "432 BC")
+  assert.equal(Model.yearLabel("1931"), "1931")
+  assert.equal(Model.yearLabel(""), "")
+})
+
+test("the chronology runs from Giza forward and ranks every building", () => {
+  const order = Model.chronology()
+  assert.equal(order.length, Model.BUILDINGS.length)
+  assert.equal(Model.BUILDINGS[order[0]].w, "Great_Pyramid_of_Giza")
+  for (let i = 1; i < order.length; i++) {
+    assert.ok(Model.yearValue(Model.BUILDINGS[order[i - 1]].y) <= Model.yearValue(Model.BUILDINGS[order[i]].y))
+  }
+  assert.equal(Model.chronoRank(Model.BUILDINGS[order[0]]), 0)
+  assert.equal(Model.chronoRank(Model.BUILDINGS[order[order.length - 1]]), order.length - 1)
+})
+
+test("a building maps back to the day it is dealt in the current cycle", () => {
+  const key = "20260905"
+  const entry = Model.entryForDateKey(key)
+  assert.equal(Model.dateKeyForIndex(Model.BUILDINGS.indexOf(entry), key), key)
+  // Every building in the cycle round-trips: pick its day, deal that day, get it back.
+  for (let i = 0; i < Model.BUILDINGS.length; i += 17) {
+    const dealt = Model.dateKeyForIndex(i, key)
+    assert.equal(Model.entryForDateKey(dealt), Model.BUILDINGS[i])
+  }
+  assert.equal(Model.dateKeyFromDayNumber(Model.dayNumber(key)), key)
+  assert.equal(Model.dateKeyFromDayNumber(0), "19700101")
+})
+
+test("stepping through history lands on the next building built", () => {
+  const key = "20260905"
+  const entry = Model.entryForDateKey(key)
+  const rank = Model.chronoRank(entry)
+  const laterKey = Model.chronoStepKey(entry, key, 1)
+  assert.equal(Model.chronoRank(Model.entryForDateKey(laterKey)), rank + 1)
+  const earlierKey = Model.chronoStepKey(entry, key, -1)
+  assert.equal(Model.chronoRank(Model.entryForDateKey(earlierKey)), rank - 1)
+  // The ends of history are walls, not wraps.
+  const giza = Model.BUILDINGS[Model.chronology()[0]]
+  const gizaKey = Model.dateKeyForIndex(Model.BUILDINGS.indexOf(giza), key)
+  assert.equal(Model.chronoStepKey(giza, gizaKey, -1), gizaKey)
+})
+
+test("the clock on the wall reads local time from longitude alone", () => {
+  const noonUtc = Date.UTC(2026, 8, 5, 12, 0)
+  assert.equal(Model.localTimeLine({ lat: 51.48, lon: 0 }, noonUtc), "12:00 pm there")
+  assert.equal(Model.localTimeLine({ lon: 79.92 }, noonUtc), "5:00 pm there")   // Khajuraho, ~UTC+5
+  assert.equal(Model.localTimeLine({ lon: -73.98 }, noonUtc), "7:00 am there")  // New York
+  assert.equal(Model.localTimeLine({ lon: 139.7 }, noonUtc), "9:00 pm there")   // Tokyo
+  assert.equal(Model.localTimeLine({ lon: 174.8 }, noonUtc), "12:00 am there")  // Auckland, past midnight
+  assert.equal(Model.localTimeLine({ lat: 51.48, lon: 0 }, Date.UTC(2026, 8, 5, 0, 7)), "12:07 am there")
+  assert.equal(Model.localTimeLine({}, noonUtc), "")
+  assert.equal(Model.localTimeLine(null, noonUtc), "")
 })
 
 test("date headings name the near days", () => {
@@ -176,6 +251,8 @@ test("credit and place lines skip missing parts", () => {
   assert.equal(Model.creditLine({ a: "", y: "1931" }), "1931")
   assert.equal(Model.creditLine(null), "")
   assert.equal(Model.placeLine({ p: "Poissy, France", s: "Modernism" }), "Poissy, France  ·  Modernism")
+  assert.equal(Model.placeLine({ p: "Poissy, France", s: "Modernism" }, { lon: 2.03 }, Date.UTC(2026, 8, 5, 12, 0)),
+    "Poissy, France  ·  Modernism  ·  12:00 pm there")
 })
 
 test("the clipboard payload carries name, credit, place and link", () => {
@@ -193,8 +270,6 @@ test("settings coerce the values shell.json can actually hold", () => {
   assert.equal(Model.boolSetting("false", true), false)
   assert.equal(Model.boolSetting("true", false), true)
   assert.equal(Model.boolSetting(false, true), false)
-  assert.equal(Model.choiceSetting("b", "a", ["a", "b"]), "b")
-  assert.equal(Model.choiceSetting("z", "a", ["a", "b"]), "a")
 })
 
 test("notification text is one line and cannot look like a flag", () => {

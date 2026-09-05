@@ -37,6 +37,9 @@ Item {
   readonly property string barText: entry ? Model.barLabel(entry, 24) : Model.APP_NAME
   readonly property string body: Model.bodyText(entry, summary)
 
+  // Ticks on the minute, for the clock on the wall.
+  property real nowMs: Date.now()
+
   // Raised whenever the visible building changes, so the bar can rebuild its
   // skyline and the panel can re-run its reveal.
   signal entryChanged2(var entry)
@@ -107,6 +110,11 @@ Item {
 
   function shiftDay(days) { setDateKey(Model.shiftDateKey(dateKey, days)) }
   function jumpToday() { setDateKey(todayKey) }
+
+  // The timeline browses the canon in the order it was built; each stop is
+  // still a real day in the current cycle, so the heading says when it comes.
+  function showIndex(index) { setDateKey(Model.dateKeyForIndex(index, dateKey)) }
+  function stepHistory(step) { setDateKey(Model.chronoStepKey(entry, dateKey, step)) }
 
   // A coin flip through the canon rather than a date — same machinery, just a
   // day picked at random from the next few years.
@@ -184,13 +192,17 @@ Item {
     onTriggered: if (root.active) root.load(false)
   }
 
-  // Midnight rollover. Checked on a plain timer rather than a scheduled alarm
-  // so it also survives a suspend/resume across the date boundary.
+  // Wakes on the minute — so the day turns over within a second of midnight,
+  // in step with the other daily widgets, and the wall clock stays honest. A
+  // plain timer rather than a scheduled alarm, so it survives a suspend across
+  // the date boundary.
   Timer {
-    interval: 30000
     running: root.active
-    repeat: true
+    interval: 60000 - Date.now() % 60000
     onTriggered: {
+      root.nowMs = Date.now()
+      interval = 60000 - root.nowMs % 60000
+      restart()
       var today = Model.dateKeyFromDate(new Date())
       if (today === root.todayKey) return
       var wasToday = root.dateKey === root.todayKey
