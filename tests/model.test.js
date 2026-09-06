@@ -279,3 +279,25 @@ test("notification text is one line and cannot look like a flag", () => {
   assert.ok(command.includes("--app-name"))
   assert.equal(Model.toastCommand(null), null)
 })
+
+test("a building knows how old it is", () => {
+  const now = Date.UTC(2026, 8, 5)
+  assert.equal(Model.ageLine("432 BC", now), "2,458 years old")
+  assert.equal(Model.ageLine("1931", now), "95 years old")
+  assert.equal(Model.ageLine("2017", now), "9 years old")
+  assert.equal(Model.ageLine("2025", now), "1 year old")
+  assert.equal(Model.ageLine("2026", now), "new this year")
+  assert.equal(Model.ageLine("1882–", now), "building since 1882")
+  assert.equal(Model.ageLine("someday", now), "")
+  assert.equal(Model.creditLine({ a: "Le Corbusier", y: "1931" }, now), "Le Corbusier · 1931 · 95 years old")
+  assert.equal(Model.creditLine({ a: "Le Corbusier", y: "1931" }), "Le Corbusier · 1931")
+})
+
+test("the lights come on at night there", () => {
+  const noonUtc = Date.UTC(2026, 8, 5, 12, 0)
+  assert.equal(Model.isNightThere({ lat: 35.7, lon: 139.7 }, noonUtc), true)    // 9 pm in Tokyo
+  assert.equal(Model.isNightThere({ lat: 40.7, lon: -73.98 }, noonUtc), false)  // 7 am in New York
+  assert.equal(Model.isNightThere({ lat: 51.48, lon: 0 }, Date.UTC(2026, 8, 5, 5, 59)), true)
+  assert.equal(Model.isNightThere({ lat: 51.48, lon: 0 }, Date.UTC(2026, 8, 5, 6, 0)), false)
+  assert.equal(Model.isNightThere({}, noonUtc), false)
+})

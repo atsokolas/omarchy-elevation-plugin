@@ -13,11 +13,21 @@ Item {
   property color iconColor: Color.foreground
   // 0 flat to the ground, 1 fully built. Animated by `raise()`.
   property real built: 1
+  // Night at the building: the windows are lit, and there is a moon.
+  property bool night: false
 
   width: iconSize
   height: iconSize
 
   function raise() { buildAnimation.restart() }
+  // A smaller rise, for a hover.
+  function nudge() { nudgeAnimation.restart() }
+
+  SequentialAnimation {
+    id: nudgeAnimation
+    NumberAnimation { target: root; property: "built"; to: 0.82; duration: 90; easing.type: Easing.InQuad }
+    NumberAnimation { target: root; property: "built"; to: 1; duration: 380; easing.type: Easing.OutBack }
+  }
 
   SequentialAnimation {
     id: buildAnimation
@@ -27,6 +37,7 @@ Item {
 
   onFormChanged: canvas.requestPaint()
   onBuiltChanged: canvas.requestPaint()
+  onNightChanged: canvas.requestPaint()
   onIconColorChanged: canvas.requestPaint()
 
   Canvas {
@@ -99,6 +110,18 @@ Item {
       }
     })
 
+    // Where the lights come on at night. Only the forms with windows.
+    readonly property var windows: ({
+      slab: [[0.22, 0.48], [0.5, 0.48], [0.78, 0.48], [0.22, 0.69], [0.5, 0.69], [0.78, 0.69]],
+      tower: [[0.43, 0.29], [0.57, 0.29], [0.43, 0.57], [0.57, 0.57], [0.43, 0.85], [0.57, 0.85]]
+    })
+
+    function ground(ctx, span) {
+      ctx.translate((width - span) / 2, (height + span) / 2)
+      ctx.scale(span, span * Math.max(0.02, root.built))
+      ctx.translate(0, -1)
+    }
+
     onPaint: {
       var ctx = getContext("2d")
       ctx.reset()
@@ -109,9 +132,7 @@ Item {
       // Build the path under a transform that squashes it toward the ground
       // by `built`, then restore before stroking so the line stays crisp.
       ctx.save()
-      ctx.translate((width - span) / 2, (height + span) / 2)
-      ctx.scale(span, span * Math.max(0.02, root.built))
-      ctx.translate(0, -1)
+      ground(ctx, span)
       ctx.beginPath()
       draw(ctx)
       ctx.restore()
@@ -120,6 +141,23 @@ Item {
       ctx.lineJoin = "round"
       ctx.lineCap = "round"
       ctx.strokeStyle = root.iconColor
+      ctx.stroke()
+
+      if (!root.night) return
+      ctx.save()
+      ground(ctx, span)
+      ctx.beginPath()
+      var lit = windows[root.form] || []
+      for (var i = 0; i < lit.length; i++) ctx.rect(lit[i][0] - 0.04, lit[i][1] - 0.04, 0.08, 0.08)
+      ctx.restore()
+      ctx.fillStyle = root.iconColor
+      ctx.fill()
+
+      // A crescent in the corner, once there is room for one.
+      if (root.iconSize < 20) return
+      ctx.beginPath()
+      var cx = (width - span) / 2 + span * 0.14, cy = (height - span) / 2 + span * 0.16
+      ctx.arc(cx, cy, span * 0.07, Math.PI * 0.35, Math.PI * 1.65, false)
       ctx.stroke()
     }
   }

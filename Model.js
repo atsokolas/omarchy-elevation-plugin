@@ -402,6 +402,16 @@ function chronoStepKey(entry, fromKey, step, list) {
   return dateKeyForIndex(order[next], fromKey, buildings)
 }
 
+// "2,458 years old" — or, for a building still going up, since when.
+function ageLine(text, nowMs) {
+  var year = yearValue(text)
+  if (isNaN(year)) return ""
+  if (/–\s*$/.test(clean(text))) return "building since " + yearLabel(text)
+  var age = new Date(Number(nowMs)).getUTCFullYear() - year
+  if (age < 1) return "new this year"
+  return String(age).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (age === 1 ? " year old" : " years old")
+}
+
 function yearLabel(text) {
   var year = yearValue(text)
   if (isNaN(year)) return ""
@@ -414,9 +424,21 @@ function yearLabel(text) {
 // the hour. Political zones and half-hour offsets are ignored, so this is
 // within an hour of the truth everywhere and exact in most of the world —
 // enough to know whether it is night there.
-function localTimeLine(summary, nowMs) {
+function hourThere(summary, nowMs) {
   // Greenwich is a real place; only the parser's (0, 0) means "unknown".
-  if (!summary || (!summary.lat && !summary.lon)) return ""
+  if (!summary || (!summary.lat && !summary.lon)) return -1
+  var offset = Math.round(summary.lon / 15) * 3600000
+  return new Date(Number(nowMs) + offset).getUTCHours()
+}
+
+// Lights on: between eight in the evening and six in the morning there.
+function isNightThere(summary, nowMs) {
+  var hour = hourThere(summary, nowMs)
+  return hour >= 0 && (hour >= 20 || hour < 6)
+}
+
+function localTimeLine(summary, nowMs) {
+  if (hourThere(summary, nowMs) < 0) return ""
   var offset = Math.round(summary.lon / 15) * 3600000
   var there = new Date(Number(nowMs) + offset)
   var hours = there.getUTCHours()
@@ -427,11 +449,15 @@ function localTimeLine(summary, nowMs) {
 
 // ---- text ----------------------------------------------------------------
 
-function creditLine(entry) {
+function creditLine(entry, nowMs) {
   if (!entry) return ""
   var parts = []
   if (clean(entry.a)) parts.push(clean(entry.a))
   if (clean(entry.y)) parts.push(clean(entry.y))
+  if (nowMs !== undefined) {
+    var age = ageLine(entry.y, nowMs)
+    if (age) parts.push(age)
+  }
   return parts.join(" · ")
 }
 
@@ -647,6 +673,8 @@ if (typeof module !== "undefined" && module.exports) {
     dateKeyForIndex: dateKeyForIndex,
     yearValue: yearValue,
     yearLabel: yearLabel,
+    ageLine: ageLine,
+    isNightThere: isNightThere,
     chronology: chronology,
     chronoRank: chronoRank,
     chronoStepKey: chronoStepKey,

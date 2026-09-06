@@ -121,10 +121,14 @@ BarWidget {
       ElevationIcon {
         id: icon
         form: root.entry ? root.entry.f : "slab"
+        night: root.service ? Model.isNightThere(root.service.summary, root.service.nowMs) : false
         iconSize: button.fontSize
         iconColor: button.foreground
         x: root.vertical ? (parent.width - width) / 2 : button.scaledHorizontalMargin
         y: (parent.height - height) / 2
+
+        // A hover rebuilds it a little.
+        HoverHandler { onHoveredChanged: if (hovered) icon.nudge() }
       }
 
       Text {

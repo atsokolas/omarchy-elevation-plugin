@@ -174,6 +174,7 @@ Panel {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             form: root.entry ? root.entry.f : "slab"
+            night: Model.isNightThere(root.service.summary, root.service.nowMs)
             iconSize: Style.font.display
             iconColor: root.foreground
           }
@@ -271,6 +272,7 @@ Panel {
             ElevationIcon {
               anchors.centerIn: parent
               form: root.entry ? root.entry.f : "slab"
+              night: Model.isNightThere(root.service.summary, root.service.nowMs)
               iconSize: Math.min(parent.height * 0.5, Style.space(72))
               iconColor: root.foreground
               opacity: photo.status === Image.Ready ? 0 : 0.22
@@ -305,7 +307,7 @@ Panel {
 
             Text {
               Layout.fillWidth: true
-              text: Model.creditLine(root.entry)
+              text: Model.creditLine(root.entry, root.service.nowMs)
               visible: text !== ""
               color: Color.accent
               font.family: root.fontFamily

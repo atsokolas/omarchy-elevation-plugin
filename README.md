@@ -18,7 +18,9 @@ the photograph, the architect, and the story.
 - **A timeline** — every building as a tick in the order it was built, with
   the day's building marked and its year beneath. Click a tick to visit.
 - **The clock on the wall** — the local time at the building, read from its
-  longitude, so you know whether it is night there.
+  longitude, so you know whether it is night there. When it is, the windows in
+  the silhouette are lit and a moon hangs in the corner of the panel.
+- **Its age** — "2,458 years old" beside the year, or "building since 1882".
 - **A passport** — where this cycle stands and how long until the reshuffle.
 
 ## Install
@@ -68,7 +70,8 @@ image, and the panel falls back to the drawn silhouette.
 | `r` | Refetch the article |
 | `s` | Settings |
 
-On the bar: left click opens the panel, right or middle click refetches.
+On the bar: left click opens the panel, right or middle click refetches, and a
+hover rebuilds the silhouette a little.
 
 ## Settings
 
