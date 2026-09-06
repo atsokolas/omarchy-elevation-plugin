@@ -30,7 +30,8 @@
     "defaults": {
       "showName": true,
       "showPhoto": true,
-      "notify": false
+      "notify": false,
+      "themed": false
     },
     "schema": [
       {
@@ -49,6 +50,12 @@
         "key": "notify",
         "type": "boolean",
         "label": "Notify on the daily change",
+        "defaultValue": false
+      },
+      {
+        "key": "themed",
+        "type": "boolean",
+        "label": "Photo in my theme",
         "defaultValue": false
       }
     ]

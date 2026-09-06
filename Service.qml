@@ -25,7 +25,16 @@ Item {
   readonly property bool isToday: dateKey === todayKey
 
   property var summary: ({ ok: false, extract: "", description: "", image: "", lat: 0, lon: 0 })
+  // The photograph as taken, and what the panel shows — the same file, or
+  // its twin rendered in the current theme.
+  property string plainPath: ""
   property string imagePath: ""
+
+  // The desktop's palette, watched so a theme change re-renders the photo.
+  readonly property string colorsPath: Quickshell.env("HOME") + "/.local/state/omarchy/current/theme/colors.toml"
+  property var colors: null
+  readonly property string themeKey: Model.themeKey(colors)
+  property string _themedPending: ""
   property bool loading: false
   property bool imageLoading: false
   property string lastError: ""
@@ -33,6 +42,7 @@ Item {
   readonly property bool showName: Model.boolSetting(setting("showName", true), true)
   readonly property bool showPhoto: Model.boolSetting(setting("showPhoto", true), true)
   readonly property bool notify: Model.boolSetting(setting("notify", false), false)
+  readonly property bool themed: Model.boolSetting(setting("themed", false), false)
 
   readonly property string barText: entry ? Model.barLabel(entry, 24) : Model.APP_NAME
   readonly property string body: Model.bodyText(entry, summary)
@@ -62,6 +72,7 @@ Item {
     if (!force && _loadedTitle === title && summary.ok) return
     _loadedTitle = title
     summary = { ok: false, extract: "", description: "", image: "", lat: 0, lon: 0 }
+    plainPath = ""
     imagePath = ""
     lastError = ""
     loading = true
@@ -96,6 +107,22 @@ Item {
   }
 
   function refresh() { load(true) }
+
+  // Show the photograph as taken, or in the current theme — rendered once
+  // per palette and kept beside the original.
+  function present() {
+    if (plainPath === "") return
+    if (!themed || !colors) {
+      imagePath = plainPath
+      return
+    }
+    _themedPending = Model.themedPath(plainPath, themeKey)
+    themedCheckProcess.command = ["test", "-s", _themedPending]
+    themedCheckProcess.running = true
+  }
+
+  onThemedChanged: present()
+  onThemeKeyChanged: present()
 
   function setDateKey(key) {
     var next = String(key || todayKey)
@@ -175,11 +202,40 @@ Item {
     onExited: function(code) {
       root.imageLoading = false
       if (code !== 0) {
+        root.plainPath = ""
         root.imagePath = ""
         return
       }
-      root.imagePath = String(root._imageOutput).replace(/^\s+|\s+$/g, "")
+      root.plainPath = String(root._imageOutput).replace(/^\s+|\s+$/g, "")
+      root.present()
     }
+  }
+
+  FileView {
+    path: root.colorsPath
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.colors = Model.parseColors(text())
+    onLoadFailed: root.colors = null
+    onFileChanged: reload()
+  }
+
+  Process {
+    id: themedCheckProcess
+    onExited: function(code) {
+      if (code === 0) {
+        root.imagePath = root._themedPending
+        return
+      }
+      themedRenderProcess.command = Model.themedCommand(root.plainPath, root._themedPending, root.colors)
+      themedRenderProcess.running = true
+    }
+  }
+
+  // A failed render — no ImageMagick, say — falls back to the photograph.
+  Process {
+    id: themedRenderProcess
+    onExited: function(code) { root.imagePath = code === 0 ? root._themedPending : root.plainPath }
   }
 
   // The network can arrive after the shell does. Back off gently rather than

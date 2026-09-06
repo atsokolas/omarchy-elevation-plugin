@@ -158,6 +158,7 @@ Panel {
         else if (key === "n") root.service.surprise()
         else if (key === "[") root.service.stepHistory(-1)
         else if (key === "]") root.service.stepHistory(1)
+        else if (key === "i") root.persistSettings({ themed: !root.service.themed })
       }
 
       ColumnLayout {
@@ -559,6 +560,20 @@ Panel {
 
           PanelHero {
             Layout.fillWidth: true
+            title: "Photo in my theme"
+            meta: "Render the photograph in the desktop's colours"
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            trailingControl: Component {
+              ToggleSwitch {
+                checked: root.service.themed
+                onToggled: root.persistSettings({ themed: !root.service.themed })
+              }
+            }
+          }
+
+          PanelHero {
+            Layout.fillWidth: true
             title: "Notify on the daily change"
             meta: "A quiet toast when the building turns over"
             foreground: root.foreground
@@ -575,7 +590,7 @@ Panel {
 
           Text {
             Layout.fillWidth: true
-            text: "← →  browse days   ·   [ ]  earlier / later in history   ·   t  today\nn  surprise me   ·   o  open   ·   c  copy   ·   m  map   ·   r  refetch"
+            text: "← →  browse days   ·   [ ]  earlier / later in history   ·   t  today\nn  surprise me   ·   o  open   ·   c  copy   ·   m  map   ·   i  in my theme   ·   r  refetch"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption

@@ -21,6 +21,7 @@ the photograph, the architect, and the story.
   longitude, so you know whether it is night there. When it is, the windows in
   the silhouette are lit and a moon hangs in the corner of the panel.
 - **Its age** — "2,458 years old" beside the year, or "building since 1882".
+- **In my theme** — the photograph rendered in the desktop's own palette, following theme changes. A setting, or `i` in the panel.
 - **A passport** — where this cycle stands and how long until the reshuffle.
 
 ## Install
@@ -67,6 +68,7 @@ image, and the panel falls back to the drawn silhouette.
 | `o` / `Return` | Open on Wikipedia |
 | `c` | Copy the building to the clipboard |
 | `m` | Open the location on a map |
+| `i` | Photo in my theme / as taken |
 | `r` | Refetch the article |
 | `s` | Settings |
 
@@ -82,6 +84,7 @@ On the widget's `shell.json` entry, or from the panel's settings page.
 | `showName` | `true` | The building's name beside the silhouette |
 | `showPhoto` | `true` | Fetch the article's lead image |
 | `notify` | `false` | A quiet toast when the building turns over |
+| `themed` | `false` | Render the photograph in the current theme's colours |
 
 ## IPC
 
@@ -103,6 +106,7 @@ widget entry in `shell.json`, and only when you change a setting.
 
 - Omarchy Quattro (Quickshell plugin support)
 - `curl`
+- `magick` (ImageMagick) for the in-my-theme render; without it the photo shows as taken
 - Network access to `en.wikipedia.org` for the article and photo — everything
   else works offline
 
