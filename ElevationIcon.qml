@@ -10,7 +10,7 @@ Item {
   // One of Model.FORMS. Every entry in the canon names its own.
   property string form: "slab"
   property real iconSize: Style.font.icon
-  property color iconColor: Color.foreground
+  property color iconColor: "#cccccc"
   // 0 flat to the ground, 1 fully built. Animated by `raise()`.
   property real built: 1
   // Night at the building: the windows are lit, and there is a moon.
