@@ -306,7 +306,8 @@ const TOML = 'mode = "dark"\n\naccent = "#7aa2f7"\nmuted = "#414868"\n\nbackgrou
 
 test("the theme's palette is read from colors.toml and sorted dark to light", () => {
   const colors = Model.parseColors(TOML)
-  assert.deepEqual(colors, { mode: "dark", background: "#1a1b26", foreground: "#a9b1d6", accent: "#7aa2f7", muted: "#414868" })
+  assert.deepEqual(colors, { mode: "dark", background: "#1a1b26", foreground: "#a9b1d6", accent: "#7aa2f7", muted: "#414868", red: "#a9b1d6" })
+  assert.equal(Model.parseColors(TOML + 'red = "#f7768e"\n').red, "#f7768e")
   assert.deepEqual(Model.themeStops(colors), ["#1a1b26", "#414868", "#7aa2f7", "#a9b1d6"])
   const light = Model.parseColors('mode = "light"\nbackground = "#fafafa"\nforeground = "#202020"\naccent = "#3060c0"\nmuted = "#a0a0a0"')
   assert.deepEqual(Model.themeStops(light), ["#202020", "#3060c0", "#a0a0a0", "#fafafa"])

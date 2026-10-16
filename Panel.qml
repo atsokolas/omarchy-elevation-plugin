@@ -19,6 +19,11 @@ Panel {
   readonly property var barIdentity: hostWidget || root
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color dim: Qt.darker(foreground, 1.55)
+  // Accent and warning come from the theme palette: the shell's Color
+  // singleton isn't reliably visible to third-party plugins.
+  readonly property var palette: service ? service.colors : null
+  readonly property color accent: palette ? palette.accent : foreground
+  readonly property color urgent: palette ? palette.red : foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
   readonly property var sharedService: bar && bar.shell && typeof bar.shell.serviceFor === "function"
@@ -204,7 +209,7 @@ Panel {
               text: root.page === "settings"
                 ? "Elevation"
                 : (root.service.lastError !== "" ? root.service.lastError : root.dateHeading)
-              color: root.service.lastError !== "" && root.page !== "settings" ? Color.urgent : root.dim
+              color: root.service.lastError !== "" && root.page !== "settings" ? root.urgent : root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
               elide: Text.ElideRight
@@ -310,7 +315,7 @@ Panel {
               Layout.fillWidth: true
               text: Model.creditLine(root.entry, root.service.nowMs)
               visible: text !== ""
-              color: Color.accent
+              color: root.accent
               font.family: root.fontFamily
               font.pixelSize: Style.font.body
               wrapMode: Text.WordWrap
@@ -389,7 +394,7 @@ Panel {
               width: Style.spaceReal(3)
               height: Style.spaceReal(11)
               radius: width / 2
-              color: Color.accent
+              color: root.accent
               x: timeline.xAt(timeline.rank) - width / 2
               y: Style.spaceReal(6)
               Behavior on x { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
@@ -418,7 +423,7 @@ Panel {
               anchors.bottom: parent.bottom
               x: Math.max(Style.spaceReal(48), Math.min(timeline.width - width - Style.spaceReal(48), marker.x + marker.width / 2 - width / 2))
               text: root.entry ? Model.yearLabel(root.entry.y) : ""
-              color: Color.accent
+              color: root.accent
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
               font.bold: true

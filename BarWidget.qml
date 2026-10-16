@@ -35,6 +35,9 @@ BarWidget {
   }
 
   readonly property var service: panelLoader.item ? panelLoader.item.service : null
+  // Accent and warning come from the theme palette: the shell's Color
+  // singleton isn't reliably visible to third-party plugins.
+  readonly property color accent: service && service.colors ? service.colors.accent : (bar ? bar.barForeground : Color.foreground)
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
   readonly property var entry: service ? service.entry : null
   readonly property bool showName: service ? service.showName : true
@@ -100,7 +103,7 @@ BarWidget {
     labelVisible: false
     hasVisualContent: true
     fixedWidth: root.vertical ? -1 : Math.max(12, content.implicitWidth + button.scaledHorizontalMargin * 2)
-    foreground: root.opened ? Color.accent : (root.bar ? root.bar.barForeground : Color.foreground)
+    foreground: root.opened ? root.accent : (root.bar ? root.bar.barForeground : Color.foreground)
     tooltipText: Model.tooltipText(root.entry)
     horizontalMargin: 8.75
     verticalPadding: 8.75

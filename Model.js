@@ -623,7 +623,8 @@ function parseColors(toml) {
     background: out.background.toLowerCase(),
     foreground: out.foreground.toLowerCase(),
     accent: hex.test(out.accent || "") ? out.accent.toLowerCase() : out.foreground.toLowerCase(),
-    muted: hex.test(out.muted || "") ? out.muted.toLowerCase() : out.background.toLowerCase()
+    muted: hex.test(out.muted || "") ? out.muted.toLowerCase() : out.background.toLowerCase(),
+    red: hex.test(out.red || "") ? out.red.toLowerCase() : out.foreground.toLowerCase()
   }
 }
 
