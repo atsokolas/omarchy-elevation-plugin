@@ -135,6 +135,8 @@ BarWidget {
       }
 
       Text {
+
+        textFormat: Text.PlainText
         id: labelText
         visible: content.labelVisible
         x: icon.x + icon.width + content.gap

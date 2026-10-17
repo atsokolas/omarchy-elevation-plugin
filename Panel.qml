@@ -195,6 +195,8 @@ Panel {
             spacing: Style.space(2)
 
             Text {
+
+              textFormat: Text.PlainText
               width: parent.width
               text: root.page === "settings" ? "Settings" : Model.APP_NAME
               color: root.foreground
@@ -205,6 +207,8 @@ Panel {
             }
 
             Text {
+
+              textFormat: Text.PlainText
               width: parent.width
               text: root.page === "settings"
                 ? "Elevation"
@@ -270,6 +274,10 @@ Panel {
               fillMode: Image.PreserveAspectCrop
               asynchronous: true
               cache: false
+              // Decode no larger than the frame needs; the photograph was
+              // checked for type and size before it reached the cache.
+              sourceSize.width: Math.ceil(width * Screen.devicePixelRatio)
+              sourceSize.height: Math.ceil(height * Screen.devicePixelRatio)
               opacity: status === Image.Ready ? 1 : 0
               Behavior on opacity { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
             }
@@ -286,6 +294,8 @@ Panel {
             }
 
             Text {
+
+              textFormat: Text.PlainText
               anchors.centerIn: parent
               anchors.verticalCenterOffset: Style.space(46)
               visible: photo.status !== Image.Ready && !root.service.imageLoading
@@ -302,6 +312,8 @@ Panel {
             spacing: Style.space(3)
 
             Text {
+
+              textFormat: Text.PlainText
               Layout.fillWidth: true
               text: root.entry ? String(root.entry.n) : ""
               color: root.foreground
@@ -312,6 +324,8 @@ Panel {
             }
 
             Text {
+
+              textFormat: Text.PlainText
               Layout.fillWidth: true
               text: Model.creditLine(root.entry, root.service.nowMs)
               visible: text !== ""
@@ -322,6 +336,8 @@ Panel {
             }
 
             Text {
+
+              textFormat: Text.PlainText
               Layout.fillWidth: true
               text: Model.placeLine(root.entry, root.service.summary, root.service.nowMs).toUpperCase()
               visible: text !== ""
@@ -344,6 +360,8 @@ Panel {
             boundsBehavior: Flickable.StopAtBounds
 
             Text {
+
+              textFormat: Text.PlainText
               id: bodyText
               width: bodyFlick.width
               text: Model.trimToSentences(root.service.body, 700)
@@ -401,6 +419,8 @@ Panel {
             }
 
             Text {
+
+              textFormat: Text.PlainText
               anchors.left: parent.left
               anchors.bottom: parent.bottom
               text: Model.yearLabel(Model.BUILDINGS[timeline.order[0]].y)
@@ -410,6 +430,8 @@ Panel {
             }
 
             Text {
+
+              textFormat: Text.PlainText
               anchors.right: parent.right
               anchors.bottom: parent.bottom
               text: Model.yearLabel(Model.BUILDINGS[timeline.order[timeline.order.length - 1]].y)
@@ -419,6 +441,8 @@ Panel {
             }
 
             Text {
+
+              textFormat: Text.PlainText
               id: yearNow
               anchors.bottom: parent.bottom
               x: Math.max(Style.spaceReal(48), Math.min(timeline.width - width - Style.spaceReal(48), marker.x + marker.width / 2 - width / 2))
@@ -449,6 +473,8 @@ Panel {
             implicitHeight: Math.max(footerLabel.implicitHeight, footerButtons.height)
 
             Text {
+
+              textFormat: Text.PlainText
               id: footerLabel
               anchors.left: parent.left
               anchors.right: footerButtons.left
@@ -594,6 +620,8 @@ Panel {
           Item { Layout.fillHeight: true }
 
           Text {
+
+            textFormat: Text.PlainText
             Layout.fillWidth: true
             text: "← →  browse days   ·   [ ]  earlier / later in history   ·   t  today\nn  surprise me   ·   o  open   ·   c  copy   ·   m  map   ·   i  in my theme   ·   r  refetch"
             color: root.dim

@@ -102,10 +102,20 @@ Summaries and photographs come from the Wikipedia REST API
 user agent. Nothing else leaves the machine. The plugin writes only its own
 widget entry in `shell.json`, and only when you change a setting.
 
+Everything fetched is bounded and checked before the shell sees it. Requests
+are HTTPS only, redirects included, with a time limit and a hard size limit
+(256 KB for a summary, 16 MB for a photograph) that holds whether or not the
+server sends a length. Photographs are accepted only from Wikimedia's image
+hosts, and only as JPEG, PNG, WebP or GIF no larger than 4096 px a side; the
+type is read from the file itself. Downloads land in a private temporary file
+and are moved into the cache only once they pass, and a cached file that no
+longer passes is deleted rather than shown. Article text is always drawn as
+plain text, so markup in it stays literal.
+
 ## Requirements
 
 - Omarchy Quattro (Quickshell plugin support)
-- `curl`
+- `curl`, and `file` to check photographs (both in Arch's base)
 - `magick` (ImageMagick) for the in-my-theme render; without it the photo shows as taken
 - Network access to `en.wikipedia.org` for the article and photo — everything
   else works offline

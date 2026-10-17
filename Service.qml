@@ -59,6 +59,13 @@ Item {
   property string _summaryOutput: ""
   property string _imageOutput: ""
   property string _loadedTitle: ""
+  // What each process is fetching right now. A result that arrives after the
+  // day has moved on belongs to another building: it is dropped, and the
+  // current one is asked for again, so one building's photograph can never
+  // be filed under another's name.
+  property string _summaryTitle: ""
+  property bool _summaryForce: false
+  property string _imageTitle: ""
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
@@ -76,8 +83,16 @@ Item {
     imagePath = ""
     lastError = ""
     loading = true
+    _summaryForce = force === true
+    startSummary()
+  }
+
+  function startSummary() {
+    // Still busy with an earlier building; its exit picks this one up.
+    if (summaryProcess.running) return
+    _summaryTitle = _loadedTitle
     _summaryOutput = ""
-    summaryProcess.command = Model.summaryCommand(cacheDir, title, force === true)
+    summaryProcess.command = Model.summaryCommand(cacheDir, _summaryTitle, _summaryForce)
     summaryProcess.running = true
   }
 
@@ -98,11 +113,12 @@ Item {
 
   function loadImage() {
     if (!entry || !summary.ok || !summary.image) return
-    var url = Model.upscaleThumb(summary.image, 960)
-    var path = Model.imageCachePath(cacheDir, entry.w, url)
     imageLoading = true
+    if (imageProcess.running) return
+    var url = Model.upscaleThumb(summary.image, 960)
+    _imageTitle = String(entry.w)
     _imageOutput = ""
-    imageProcess.command = Model.imageCommand(cacheDir, path, url)
+    imageProcess.command = Model.imageCommand(cacheDir, Model.imageCachePath(cacheDir, _imageTitle, url), url)
     imageProcess.running = true
   }
 
@@ -183,8 +199,17 @@ Item {
       onStreamFinished: root._summaryOutput = text
     }
     onExited: function(code) {
+      if (root._summaryTitle !== root._loadedTitle) {
+        root.startSummary()
+        return
+      }
       if (code !== 0) {
         root.loading = false
+        if (code === 3) {
+          root.lastError = "The article was too large — showing the curated note"
+          retryTimer.stop()
+          return
+        }
         root.lastError = "Offline — showing the curated note"
         retryTimer.restart()
         return
@@ -201,6 +226,10 @@ Item {
     }
     onExited: function(code) {
       root.imageLoading = false
+      if (!root.entry || root._imageTitle !== String(root.entry.w)) {
+        if (root.summary.ok && root.showPhoto) root.loadImage()
+        return
+      }
       if (code !== 0) {
         root.plainPath = ""
         root.imagePath = ""

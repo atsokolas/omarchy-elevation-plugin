@@ -511,8 +511,32 @@ function sourceLine(summary) {
 
 // ---- commands ------------------------------------------------------------
 
+// Hard ceilings on everything that comes off the network. A summary is about
+// 3–4 KB and a 960px photograph 90 KB–1 MB, so these sit well clear of real
+// traffic and only ever stop something that isn't what it claims to be.
+var SUMMARY_MAX_BYTES = 262144
+var IMAGE_MAX_BYTES = 16777216
+var IMAGE_MAX_SIDE = 4096
+var IMAGE_MAX_PIXELS = 16777216
+var IMAGE_TYPES = "image/jpeg|image/png|image/webp|image/gif"
+
+// Photographs only ever come from Wikimedia's own image hosts.
+var IMAGE_ORIGIN = /^https:\/\/(upload|thumb)\.wikimedia\.org\/[^\s"'\\]+$/
+
 function slug(title) {
-  return String(title || "").replace(/[^A-Za-z0-9_.-]/g, "_").substring(0, 120)
+  return String(title || "").replace(/[^A-Za-z0-9_.-]/g, "_").replace(/^\.+/, "_").substring(0, 120)
+}
+
+// A short, stable fingerprint (FNV-1a) so a cached photograph is tied to the
+// address it came from, not just to the building it was fetched for.
+function fingerprint(text) {
+  var value = String(text || "")
+  var hash = 0x811c9dc5
+  for (var i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return ("0000000" + hash.toString(16)).slice(-8)
 }
 
 function summaryUrl(title) {
@@ -523,38 +547,72 @@ function pageUrl(title) {
   return WIKI_PAGE + encodeURIComponent(String(title || ""))
 }
 
+function imageUrlAllowed(url) {
+  return IMAGE_ORIGIN.test(String(url || ""))
+}
+
 function summaryCachePath(cacheDir, title) {
   return String(cacheDir || "") + "/" + slug(title) + ".json"
 }
 
 function imageCachePath(cacheDir, title, url) {
   var ext = ".jpg"
-  var match = String(url || "").match(/\.(jpe?g|png|webp|gif|svg)(\?|$)/i)
+  var match = String(url || "").match(/\.(jpe?g|png|webp|gif)(\?|$)/i)
   if (match) ext = "." + match[1].toLowerCase()
-  return String(cacheDir || "") + "/" + slug(title) + ext
+  return String(cacheDir || "") + "/" + slug(title) + "-" + fingerprint(url) + ext
+}
+
+// The download both commands share: HTTPS only, redirects included, into a
+// private temporary file, cut off at $max bytes whether or not the server
+// sends a length. curl's own limit catches an honest Content-Length; head
+// catches a chunked or lying one, and anything over the line fails closed.
+function fetchScript(seconds, headers) {
+  return 'fetch() { ' +
+    'tmp=$(mktemp "$dir/.part.XXXXXX") || exit 1; ' +
+    'trap \'rm -f "$tmp" "$tmp.fail"\' EXIT; ' +
+    '{ curl -fsSL --proto =https --proto-redir =https --max-redirs 3 --connect-timeout 10 --max-time ' + seconds + ' ' +
+    '--max-filesize "$max" -H "Accept-Encoding: identity" ' + headers + '-A "$ua" "$url" || echo $? > "$tmp.fail"; } ' +
+    '| head -c $((max + 1)) > "$tmp"; ' +
+    '[ "$(wc -c < "$tmp")" -le "$max" ] || exit 3; ' +
+    'if [ -e "$tmp.fail" ]; then [ "$(cat "$tmp.fail")" = 63 ] && exit 3; exit 1; fi; ' +
+    '[ -s "$tmp" ] || exit 1; ' +
+    '}; '
 }
 
 // Fetch-once-then-serve-from-disk. Args are passed positionally rather than
-// interpolated so nothing in a title or URL can escape into the shell.
+// interpolated so nothing in a title or URL can escape into the shell. Exit
+// 3 means the response was too large, which a retry won't change.
 function summaryCommand(cacheDir, title, force) {
   var script =
-    'mkdir -p "$1" || exit 1; ' +
+    'umask 077; dir="$1"; f="$2"; url="$3"; ua="$4"; max="$5"; mkdir -p "$dir" || exit 1; ' +
+    fetchScript(15, '-H "Accept: application/json" ') +
     (force ? 'rm -f "$2"; ' : "") +
-    'if [ ! -s "$2" ]; then ' +
-    'curl -fsSL --max-time 15 -A "$4" -H "Accept: application/json" -o "$2.part" "$3" || { rm -f "$2.part"; exit 1; }; ' +
-    'mv "$2.part" "$2"; ' +
-    'fi; cat "$2"'
-  return ["sh", "-c", script, "sh", String(cacheDir || ""), summaryCachePath(cacheDir, title), summaryUrl(title), USER_AGENT]
+    'if [ -s "$f" ] && [ "$(wc -c < "$f")" -gt "$max" ]; then rm -f "$f"; fi; ' +
+    'if [ ! -s "$f" ]; then fetch; mv "$tmp" "$f" || exit 1; fi; ' +
+    'cat "$f"'
+  return ["sh", "-c", script, "sh", String(cacheDir || ""), summaryCachePath(cacheDir, title), summaryUrl(title), USER_AGENT, String(SUMMARY_MAX_BYTES)]
 }
 
+// A photograph is checked by what it is, not what it's called: its size, its
+// real type from the magic bytes, and its dimensions — before it is moved
+// into the cache, and again before a cached copy is handed to QML.
 function imageCommand(cacheDir, path, url) {
   var script =
-    'mkdir -p "$1" || exit 1; ' +
-    'if [ ! -s "$2" ]; then ' +
-    'curl -fsSL --max-time 30 -A "$4" -o "$2.part" "$3" || { rm -f "$2.part"; exit 1; }; ' +
-    'mv "$2.part" "$2"; ' +
-    'fi; printf %s "$2"'
-  return ["sh", "-c", script, "sh", String(cacheDir || ""), String(path || ""), String(url || ""), USER_AGENT]
+    'umask 077; dir="$1"; f="$2"; url="$3"; ua="$4"; max="$5"; side="$6"; px="$7"; types="$8"; mkdir -p "$dir" || exit 1; ' +
+    fetchScript(30, "") +
+    'check() { ' +
+    '[ -s "$1" ] && [ "$(wc -c < "$1")" -le "$max" ] || return 1; ' +
+    'case "|$types|" in *"|$(file -b --mime-type -- "$1")|"*) ;; *) return 1 ;; esac; ' +
+    'd=$(file -b -- "$1" | grep -oE "[0-9]+ ?x ?[0-9]+" | tail -n 1 | tr -d " "); ' +
+    'w=${d%x*}; h=${d#*x}; ' +
+    'case "$w$h" in ""|*[!0-9]*) return 1 ;; esac; ' +
+    '[ "$w" -gt 0 ] && [ "$h" -gt 0 ] && [ "$w" -le "$side" ] && [ "$h" -le "$side" ] && [ $((w * h)) -le "$px" ]; ' +
+    '}; ' +
+    'if [ -e "$f" ] && ! check "$f"; then rm -f "$f"; fi; ' +
+    'if [ ! -e "$f" ]; then fetch; check "$tmp" || exit 3; mv "$tmp" "$f" || exit 1; fi; ' +
+    'printf %s "$f"'
+  return ["sh", "-c", script, "sh", String(cacheDir || ""), String(path || ""), String(url || ""), USER_AGENT,
+    String(IMAGE_MAX_BYTES), String(IMAGE_MAX_SIDE), String(IMAGE_MAX_PIXELS), IMAGE_TYPES]
 }
 
 // Housekeeping: the cache is disposable, so anything untouched for a while goes.
@@ -692,13 +750,15 @@ function parseSummary(raw) {
   // Prefer the thumbnail: full-resolution originals can be 20 MB, and the hero
   // is never wider than a panel.
   var image = clean(thumbnail.source) || clean(original.source)
+  if (!imageUrlAllowed(image)) image = ""
+  var thumb = clean(thumbnail.source)
   return {
     ok: true,
     title: clean(data.title),
     extract: clean(data.extract),
     description: clean(data.description),
     image: image,
-    thumb: clean(thumbnail.source),
+    thumb: imageUrlAllowed(thumb) ? thumb : "",
     lat: Number(coords.lat) || 0,
     lon: Number(coords.lon) || 0
   }
@@ -751,6 +811,12 @@ if (typeof module !== "undefined" && module.exports) {
     trimToSentences: trimToSentences,
     sourceLine: sourceLine,
     slug: slug,
+    fingerprint: fingerprint,
+    imageUrlAllowed: imageUrlAllowed,
+    SUMMARY_MAX_BYTES: SUMMARY_MAX_BYTES,
+    IMAGE_MAX_BYTES: IMAGE_MAX_BYTES,
+    IMAGE_MAX_SIDE: IMAGE_MAX_SIDE,
+    IMAGE_MAX_PIXELS: IMAGE_MAX_PIXELS,
     summaryUrl: summaryUrl,
     pageUrl: pageUrl,
     summaryCachePath: summaryCachePath,
